@@ -1,0 +1,722 @@
+# source: https://www.udemy.com/course/django-python-advanced/
+
+
+
+# **********************************************************************************************
+#
+# App Design
+#
+# **********************************************************************************************
+
+# Python
+# Django: Python Web Framework
+# Django REST Framework: Django add-on
+# PostgreSQL: db
+# Docker: Dev environment
+# Swagger
+# GitHub Actions
+
+# Apps
+# app/ - Django project
+# app/core/ - Code shared between multiple apps (Database definition)
+# app/user/ - User related code (User registration & auth tokens)
+# app/recipe/ - Recipe related code
+
+
+
+# **********************************************************************************************
+#
+# Intro to TDD (Test Driven Development)
+#
+# **********************************************************************************************
+
+# Development practice
+# 1. Unit Tests
+# 2. Write Code
+
+
+
+# **********************************************************************************************
+#
+# System Setup
+#
+# **********************************************************************************************
+
+# Git Bash
+# Visual Studio Code (addin: docker)
+# Docker Desktop / Docker for Linux
+# Git
+
+# Vérifications si fonctionnel:
+docker --version
+docker version
+docker-compose --version
+docker-compose version
+git --version
+
+# Docker:
+# Dockerfile (contains all the operating system level dependencies that our project needs)
+# docker-compose (tells Docker how to run the images that are created from our Dockerfile configuration)
+# Run all commands via docker-compose
+
+# Docker on GitHub Actions:
+# Docker Hub introduced rate limit:
+#  100 pulls / 6hr or 200 pulls / 6hr if registred
+# GitHub Actions est un service partagé
+
+# pour contourner ces limitations:
+# Authenticate with Docker Hub
+#  create account
+#  se connecter avant execution de tâche
+
+
+
+# **********************************************************************************************
+#
+# Project Setup
+#
+# **********************************************************************************************
+
+# 1. créer un compte hub.docker.com et se logger
+# 2. créer un compte GitHub, créer un nouveau projet "recipe-app-api-github-actions" (Public, Add a README file, Add .gitignore, .gitignore template:Python puis Create repository)
+
+pwd  #/c/Users/nugej
+mkdir Documents
+cd Documents
+mkdir Workspace
+cd Workspace
+git clone https://github.com/123vincent/recipe-app-api.git
+ls  #recipe-app-api/
+
+# dans hub.docker.com sous vb321 > Account Settings > Security > New Access Token > nom: recipe-app-api > copier le "personal access token"
+# dans GitHub > recipe-app-api > Settings > Secrets > New repository secret > name: DOCKERHUB_USER et value:vb321 > Adding
+# dans GitHub > recipe-app-api > Settings > Secrets > New repository secret > name: DOCKERHUB_TOKEN et value:coller le "personal access token" > Adding
+
+# syntaxe d'une commande docker-compose:
+# docker-compose run --rm app sh -c "python manage.py collectstatic"
+
+# docker-compose: démarre une commande docker compose
+# run: démarre le container spécifique
+# --rm: efface le container après execution de la commande (optionnel, évite l'accumulation de container périmés dans docker)
+# app: est le nom du service à executer (indiqué dans le fichier docker-compose.yml)
+# commandes executées dans le container:
+# sh -c: passe en commande shell
+# "python manage.py collectstatic": commande à executer dans le container
+
+cd recipe-app-api
+code .  # démarre visual studio code
+
+# créer un fichier requirements.txt à la racine du projet:
+# Django>=3.2.4,<3.3
+# djangorestframework>=3.12.4,<3.13
+
+# créer un Dockerfile à la racine du projet:
+FROM python:3.9-alpine3.13
+LABEL maintainer="VincentB.fr"
+
+ENV PYTHONUNBUFFERED 1
+
+COPY ./requirements.txt /tmp/requirements.txt
+COPY ./app /app
+WORKDIR /app
+EXPOSE 8000
+
+RUN python -m venv /py && \
+    /py/bin/pip install --upgrade pip && \
+    /py/bin/pip install -r /tmp/requirements.txt && \
+    rm -rf /tmp && \
+    adduser \
+        --disabled-password \
+        --no-create-home \
+        django-user
+
+ENV PATH="/py/bin:$PATH"
+
+USER django-user
+
+# créer un fichier .dockerignore à la racine du projet (ce sont les répertoires à ignorer):
+
+# Git
+.git
+.gitignore
+
+# Docker
+.docker
+
+# Python
+app/__pycache__/
+app/*/__pycache__/
+app/*/*/__pycache__/
+app/*/*/*/__pycache__/
+.env/
+.venv/
+venv/
+
+# créer un répertoire "app" à la racine du projet
+# tester le Dockerfile:
+docker build .
+
+# créer un fichier docker-compose.yml à la racine du projet:
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8000"
+
+# tester:
+docker-compose build
+
+# Linting ?
+# tool to cheks code formatting
+# install "flake8" package
+# docker-compose run --rm app sh -c "flake8"
+# affiche les éventuelles erreurs
+
+# Testing ?
+# Django test suite, setup tests per Django app, run tests through docker-compose
+# docker-compose run --rm app sh -c "python manage.py test"
+
+# configure flake8
+# créer un fichier requirements.dev.txt à la racine du projet:
+flake8>=3.9.2,<3.10
+
+# modifier docker-compose.yml:
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        - DEV=true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8000"
+
+# modifier Dockerfile:
+FROM python:3.9-alpine3.13
+LABEL maintainer="VincentB.fr"
+
+ENV PYTHONUNBUFFERED 1
+
+COPY ./requirements.txt /tmp/requirements.txt
+COPY ./requirements.dev.txt /tmp/requirements.dev.txt
+COPY ./app /app
+WORKDIR /app
+EXPOSE 8000
+
+ARG DEV=false
+RUN python -m venv /py && \
+    /py/bin/pip install --upgrade pip && \
+    /py/bin/pip install -r /tmp/requirements.txt && \
+    if [ $DEV = "true" ]; \
+        then /py/bin/pip install -r /tmp/requirements.dev.txt ; \
+    fi && \
+    rm -rf /tmp && \
+    adduser \
+        --disabled-password \
+        --no-create-home \
+        django-user
+
+ENV PATH="/py/bin:$PATH"
+
+USER django-user
+
+# tester:
+docker-compose build
+
+# créer un fichier .flake8 dans le répertoire app (gère les exclusions):
+# flake8 controle la syntaxe de tous les fichiers contenus dans app et ses répertoires enfants
+[flake8]
+exclude =
+    migrations,
+    __pycache__,
+    manage.py,
+    settings.py
+
+# tester:
+docker-compose run --rm app sh -c "flak8"
+
+# créer le projet django:
+docker-compose run --rm app sh -c "django-admin startproject app ."
+# cette commande crée le projet django nommé "app" avec toutes ses dépendences dans le répertoire app existant.
+
+# démarrer le projet
+docker-compose up
+
+# ouvrir un navigateur
+http://localhost:8000 ou http://127.0.0.1:8000
+# affiche la page d'acceuil de django, tout fonctionne correctement
+
+# pour stoper:
+Ctrl + c
+
+
+
+# **********************************************************************************************
+#
+# Configure GitHub Actions
+#
+# **********************************************************************************************
+# common uses:
+# Code Linting
+# Unit tests
+
+# How it Works ?
+# push to GitHub, run unit tests, Success/fail
+
+# céer un fichier de configuration .github/workflows/checks.yml à la racine du projet:
+---
+name: Checks
+
+on: [push]
+
+jobs:
+  test-lint:
+    name: Test and Lint
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Test
+        run: docker-compose run --rm app sh -c "python manage.py test"
+      - name: Lint
+        run: docker-compose run --rm app sh -c "flake8"
+
+# ########################################
+# pousser le projet sur GitHub
+# ########################################
+git add .
+git commit -am "description de l'action ou de l'étape"
+git push origin
+
+# puis aller sur GitHub et constater les éventuelles erreurs
+
+
+
+# **********************************************************************************************
+#
+# TDD (Test Driven Development) with django
+#
+# **********************************************************************************************
+
+# principe:
+# créer un fichier app/app/calc.py:
+"""
+Calculator functions
+"""
+
+
+def add(x, y):
+    """Add x and y and return result."""
+    return x + y
+
+# créer un fichier app/app/tests.py:
+"""
+Sample tests
+"""
+from django.test import SimpleTestCase
+
+from app import calc
+
+
+class CalcTests(SimpleTestCase):
+    """Test the calc module."""
+
+    def test_add_numbers(self):
+        """Test adding numbers together."""
+        res = calc.add(5, 6)
+
+        self.assertEqual(res, 11)
+
+# ce test vérifie si en utilisant la fonction "add" définie dans app/app/calc.py
+# l'addition de 5 + 6 = 11 ?
+# si oui alors la fonction "add" est correcte sinon elle doit être corrigée
+# puis lancer le test:
+docker-compose run --rm app sh -c "python manage.py test"
+
+# la bonne pratique:
+# 1. écrire un test avant le développement du code
+# 2. le test échoue
+# 3. écrire le code afin que le test réussit
+
+# Mocking ?
+# example:
+# register_user() > create_in_db() > send_welcome_email() > email
+# en phase d'essai on crée un "dummy" pour vérifier si tout fonctionne correctement.
+# on mock la fonction send_welcome_email() pour éviter qu'elle envoie l'email
+
+# autre exemple: on vérifie si la db est active, si non alors on attend, si oui alors on poursuit
+
+# si un test ne fonctionne pas vérifier:
+# si un fichier __init__.py est présent dans les répertoires
+# si la méthode de test est préfixée par test_une_fonction()
+# dans le répertoire à tester peuvent se trouver soit un sous-répertoire tests/ contenant les class à tester OU un fichier tests.py contenant les class à tester > PAS les deux!
+
+
+
+# **********************************************************************************************
+#
+# Configure Database
+#
+# **********************************************************************************************
+
+# compléter docker-compose.yml avec les lignes suivantes:
+      - ./app:/app
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=devdb
+      - DB_USER=devuser
+      - DB_PASS=changeme
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13-alpine
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=devdb
+      - POSTGRES_USER=devuser
+      - POSTGRES_PASSWORD=changeme
+
+volumes:
+  dev-db-data:
+
+# tester:
+docker-compose up
+
+# ########################################
+# Psycopg2: PostgreSQL driver for Python
+# ########################################
+
+# Psycopg est le plus populaire PostgreSQL adaptateur pour le Programmation Python langue.
+# Son cœur est une mise en œuvre complète du API DB Python 2.0 spécifications.
+# Plusieurs extensions permettent d'accéder à de nombreuses fonctionnalités proposées par PostgreSQL.
+
+# compléter le fichier Dockerfile:
+FROM python:3.9-alpine3.13
+LABEL maintainer="VincentB.fr"
+
+ENV PYTHONUNBUFFERED 1
+
+COPY ./requirements.txt /tmp/requirements.txt
+COPY ./requirements.dev.txt /tmp/requirements.dev.txt
+COPY ./app /app
+WORKDIR /app
+EXPOSE 8000
+
+ARG DEV=false
+RUN python -m venv /py && \
+    /py/bin/pip install --upgrade pip && \
+    apk add --update --no-cache postgresql-client && \
+    apk add --update --no-cache --virtual .tmp-build-deps \
+        build-base postgresql-dev musl-dev && \
+    /py/bin/pip install -r /tmp/requirements.txt && \
+    if [ $DEV = "true" ]; \
+        then /py/bin/pip install -r /tmp/requirements.dev.txt ; \
+    fi && \
+    rm -rf /tmp && \
+    apk del .tmp-build-deps && \
+    adduser \
+        --disabled-password \
+        --no-create-home \
+        django-user
+
+ENV PATH="/py/bin:$PATH"
+
+USER django-user
+
+# compléter le fichier requierements.txt
+Django>=3.2.4,<3.3
+djangorestframework>=3.12.4,<3.13
+psycopg2>=2.8.6,<2.9
+
+# tester:
+docker-compose down
+docker-compose build
+
+# compléter le fichier app/app/settings.py:
+
+# Database
+# https://docs.djangoproject.com/en/3.2/ref/settings/#databases
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'HOST': os.environ.get('DB_HOST'),
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASS'),
+    }
+}
+
+# effacer le fichier app/app/db.sqlite3
+
+# Fixing database race condition
+# depandes_on
+
+# démarrer un nouveau projet django "core"
+docker-compose run --rm app sh -c "python manage.py startapp core"
+
+# le répertoire app/core et toutes ses dépendences sont ajoutés au répertoire app/
+# effacer le fichier app/core/tests.py
+# effacer le fichier app/core/views.py
+# créer le répertoire app/core/tests
+# créer le fichier app/core/tests/__init__.py
+
+# compléter le fichier app/app/settings.py:
+# Application definition
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'core',
+]
+
+# créer le répertoire app/core/management
+# créer le fichier app/core/management/__init__.py
+# créer le répertoire app/core/management/commands
+# créer le fichier app/core/management/commands/__init__.py
+# créer le fichier app/core/management/commands/wait_for_db.py:
+"""
+Django command to wait for the database to be available.
+"""
+import time
+
+from psycopg2 import OperationalError as Psycopg2OpError
+
+from django.db.utils import OperationalError
+from django.core.management.base import BaseCommand
+
+
+class Command(BaseCommand):
+    """Django command to wait for database."""
+
+    def handle(self, *args, **options):
+        pass
+
+# créer le fichier app/core/tests/test_commands.py:
+"""
+Test custom Django management commands.
+"""
+from unittest.mock import patch
+
+from psycopg2 import OperationalError as Psycopg2OpError
+
+from django.core.management import call_command
+from django.db.utils import OperationalError
+from django.test import SimpleTestCase
+
+
+@patch('core.management.commands.wait_for_db.Command.check')
+class CommandTests(SimpleTestCase):
+    """Test commands."""
+
+    def test_wait_for_db_ready(self, patched_check):
+        """Test waiting for database if database ready."""
+        patched_check.return_value = True
+
+        call_command('wait_for_db')
+
+        patched_check.assert_called_once_with(databases=['default'])
+
+    @patch('time.sleep')
+    def test_wait_for_db_delay(self, patched_sleep, patched_check):
+        """Test waiting for database when getting OperationalError."""
+        patched_check.side_effect = [Psycopg2OpError] * 2 + \
+            [OperationalError] * 3 + [True]
+
+        call_command('wait_for_db')
+
+        self.assertEqual(patched_check.call_count, 6)
+        patched_check.assert_called_with(databases=['default'])
+
+# tester:
+docker-compose run --rm app sh -c "python manage.py test"
+# le test échoue car le fichier wait_for_db.py n'est pas complet
+
+# compléter le fichier app/core/management/commands/wait_for_db.py:
+"""
+Django command to wait for the database to be available.
+"""
+import time
+
+from psycopg2 import OperationalError as Psycopg2OpError
+
+from django.db.utils import OperationalError
+from django.core.management.base import BaseCommand
+
+
+class Command(BaseCommand):
+    """Django command to wait for database."""
+
+    def handle(self, *args, **options):
+        """Entrypoint for command."""
+        self.stdout.write('Waiting for database...')
+        db_up = False
+        while db_up is False:
+            try:
+                self.check(databases=['default'])
+                db_up = True
+            except (Psycopg2OpError, OperationalError):
+                self.stdout.write('Database unavailable, waiting 1 second...')
+                time.sleep(1)
+
+        self.stdout.write(self.style.SUCCESS('Database available!'))
+
+# tester:
+docker-compose run --rm app sh -c "python manage.py test"
+# cette fois tout fonctionne parfaitement
+
+# tester:
+docker-compose run --rm app sh -c "python manage.py wait_for_db"
+# réponse: Database available!
+
+# corriger les éventuelles erreurs de syntaxe dans wait_for_db:
+docker-compose run --rm app sh -c "python manage.py wait_for_db && flake8"
+
+# modifier app/core/admin.py (le but est de rajouter quelques espaces en fin de code pour lever l'erreur):
+from django.contrib import admin  # noqa
+
+# modifier app/core/models.py (le but est de rajouter quelques espaces en fin de code pour lever l'erreur):
+from django.db import models  # noqa
+
+# tester et vérifier syntaxes du projet complet:
+docker-compose run --rm app sh -c "python manage.py test && flake8"
+
+# ########################################
+# Database Migrations
+# ########################################
+# Django ORM (Object Relational Mapper)
+# Django gère les opérations des bases de données, les relations, etc.
+# Django insère des tables, ajoute des champs, suprime, etc.
+# Django se connecte à une db existant et gère les données existantes
+
+# Using the ORM (Object Relational Mapper)
+# Define models > django generates migration files > Setup database > Stor data
+
+# Models contain:
+#   Name
+#   Fields
+#   Other metadata
+#   Custom Python logic
+
+# deux commandes:
+python manage.py makemigrations
+python manage.py migrate
+
+# compléter docker-compose.yml afin d'ajouter la fonction: wait_for_db:
+    volumes:
+      - ./app:/app
+    command: >
+      sh -c "python manage.py wait_for_db &&
+             python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=devdb
+      - DB_USER=devuser
+      - DB_PASS=changeme
+    depends_on:
+      - db
+
+# tester:
+docker-compose down
+docker-compose up
+# vérifier dans un exploreur si tout fonctionne:
+http://localhost:8000
+
+# compléter le fichier .github/workflows/checks.yml:
+- name: Test
+        run: docker-compose run --rm app sh -c "python manage.py wait_for_db && python manage.py test"
+
+# pousser le projet dans GitHub:
+git add .
+git commit -am "Configured docker compose and checks to wait for db"
+git push origin
+
+# vérifier sur GitHub
+
+
+
+# **********************************************************************************************
+#
+# Create User Model
+#
+# **********************************************************************************************
+
+# ########################################
+# préparer une migration  (leçon 48)
+# ########################################
+# crée les modèles présents dans la bd
+# (exemple: création du modèle User: app\core\migrations\0001_initial.py)
+docker-compose run --rm app sh -c "python manage.py makemigrations"
+
+# ########################################
+# appliquer la migration
+# ########################################
+docker-compose run --rm app sh -c "python manage.py wait_for_db && python manage.py migrate"
+
+# si erreur: django.db.migrations.exceptions.InconsistentMigrationHistory
+# alors il faut effacer le volume recipe-app-api_dev-db-data
+# ce volume contient les données de notre db
+
+# lister les volumes présents
+docker volume ls
+# effacer ce volume recipe-app-api_dev-db-data
+docker volume rm recipe-app-api_dev-db-data
+# si erreur arreter le service avant d'effacer le volume
+docker-compose down
+# puis
+docker volume rm recipe-app-api_dev-db-data
+docker-compose run --rm app sh -c "python manage.py wait_for_db && python manage.py migrate"
+
+# ########################################
+# lancer un test
+# ########################################
+docker-compose run --rm app sh -c "python manage.py test"
+
+
+Setup Django Admin
+
+API Documentation
+
+Build User API
+
+Build Recipe API
+
+Build Tags API
+
+Build Ingredients API
+
+Recipe Image API
+
+Implement Filtering
+
+Deploy to AWS
+
+Summary
+
+Upgrades
