@@ -4,7 +4,15 @@
 
 # **********************************************************************************************
 #
-# App Design
+# 1. Introduction
+#
+# **********************************************************************************************
+
+
+
+# **********************************************************************************************
+#
+# 2. App Design
 #
 # **********************************************************************************************
 
@@ -26,7 +34,7 @@
 
 # **********************************************************************************************
 #
-# Intro to TDD (Test Driven Development)
+# 3. Intro to TDD (Test Driven Development)
 #
 # **********************************************************************************************
 
@@ -38,7 +46,7 @@
 
 # **********************************************************************************************
 #
-# System Setup
+# 4. System Setup
 #
 # **********************************************************************************************
 
@@ -73,7 +81,7 @@ git --version
 
 # **********************************************************************************************
 #
-# Project Setup
+# 5. Project Setup
 #
 # **********************************************************************************************
 
@@ -265,7 +273,7 @@ Ctrl + c
 
 # **********************************************************************************************
 #
-# Configure GitHub Actions
+# 6. Configure GitHub Actions
 #
 # **********************************************************************************************
 # common uses:
@@ -311,7 +319,7 @@ git push origin
 
 # **********************************************************************************************
 #
-# TDD (Test Driven Development) with django
+# 7. TDD (Test Driven Development) with django
 #
 # **********************************************************************************************
 
@@ -372,7 +380,7 @@ docker-compose run --rm app sh -c "python manage.py test"
 
 # **********************************************************************************************
 #
-# Configure Database
+# 8. Configure Database
 #
 # **********************************************************************************************
 
@@ -663,7 +671,7 @@ git push origin
 
 # **********************************************************************************************
 #
-# Create User Model
+# 9. Create User Model
 #
 # **********************************************************************************************
 
@@ -924,7 +932,7 @@ http://localhost:8000/admin
 
 # **********************************************************************************************
 #
-# Setup Django Admin
+# 10. Setup Django Admin
 #
 # **********************************************************************************************
 
@@ -1079,11 +1087,115 @@ docker-compose run --rm app sh -c "python manage.py test"
 
 # **********************************************************************************************
 #
-# API Documentation
+# 11. API Documentation
+#
+# **********************************************************************************************
+# implémentation de Swagger et OpenApi Schema
+
+# installation de drf-spectacular:
+# https://drf-spectacular.readthedocs.io/en/latest/readme.html#installation
+# https://pypi.org/project/drf-spectacular/
+
+# compléter le fichier requirements.txt:
+drf-spectacular>=0.15.1,<0.16
+
+# puis vérifier si l'installation fonctionne:
+docker-compose build
+
+# compléter le fichier app/app/settings.py:
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
+    'core',
+]
+
+# puis ajouter à la fin du fichier settings.py:
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# voir documentation: https://drf-spectacular.readthedocs.io/en/latest/index.html
+
+# compléter le fichier app/app/urls.py:
+# https://drf-spectacular.readthedocs.io/en/latest/readme.html#take-it-for-a-spin
+
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
+
+from django.contrib import admin
+from django.urls import path
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/schema/', SpectacularAPIView.as_view(), name='api-schema'),
+    path(
+        'api/docs/',
+        SpectacularSwaggerView.as_view(url_name='api-schema'),
+        name='api-docs',
+    )
+]
+
+# dans un terminal démarrer le serveur:
+docker-compose up
+
+# dans un explorateur web:
+http:127.0.0.1:8000/api/docs/
+http:localhost:8000/api/docs/
+
+# la page de notre documentaton Swagger s'affiche
+# ajouter des points de terminaison
+# cliquer sur le lien /api/schema/ (en haut à gauche de la page)
+# une page enregister sous s'affiche:
+# enregister dans le Desktop le fichier: schema.yml puis presser sur le bouton enregister
+# ouvrir ce fichier avec un éditeur de texte
+# il affiche la documentation de la page sous le format yaml (.yml)
+openapi: 3.0.3
+info:
+  title: ''
+  version: 0.0.0
+paths:
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+...
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: Session
+# tout fonctionne parfaitement
+
+# ########################################
+# pousser le projet sur GitHub
+# ########################################
+git add .
+git commit -am "description de l'action ou de l'étape"
+git push origin
+
+# puis aller sur GitHub sous l'onglet "Actions" et constater les éventuelles erreurs
+
+
+
+# **********************************************************************************************
+#
+# 12. Build User API
 #
 # **********************************************************************************************
 
-# compléter le fichier requirements.txt:
 
 
 
@@ -1093,17 +1205,6 @@ docker-compose run --rm app sh -c "python manage.py test"
 
 
 
-
-
-
-
-
-
-
-
-
-
-Build User API
 
 Build Recipe API
 
