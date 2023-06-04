@@ -305,7 +305,7 @@ git add .
 git commit -am "description de l'action ou de l'étape"
 git push origin
 
-# puis aller sur GitHub et constater les éventuelles erreurs
+# puis aller sur GitHub sous l'onglet "Actions" et constater les éventuelles erreurs
 
 
 
