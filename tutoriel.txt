@@ -667,12 +667,107 @@ git push origin
 #
 # **********************************************************************************************
 
+# How to customise user model:
+#   Create model
+#   Create custom Manager
+#   Set AUTH_USER_MODEL in settings.py
+#   Create and run migrations
+
+# AbstractBaseUser
+#   Provides features for authentication
+#   Doesn't include Fields
+# PermissionsMixin
+#   Support for Django permission system
+#   Includes fields and methods
+
+# User fields
+#   email
+#   name
+#   is_active
+#   is_staff
+
+Supprimer les espaces vides dans les lignes afin d'éviter des erreurs
+File > Preferences > Settings
+puis taper whitespace
+puis scroller vers le bas et cocher Files:Trim Trailing Whitespace
+puis fermer la fenêtre settings
+
+# créer le fichier app/core/tests/test_models.py:
+"""
+Tests for models.
+"""
+from django.test import TestCase
+from django.contrib.auth import get_user_model
+
+
+class ModelTests(TestCase):
+    """Test models."""
+
+    def test_create_user_with_email_successful(self):
+        """Test creating a user with an email is successful."""
+        email = 'test@example.com'
+        password = 'testpass123'
+        user = get_user_model().objects.create_user(
+            email=email,
+            password=password,
+        )
+
+        self.assertEqual(user.email, email)
+        self.assertTrue(user.check_password(password))
+
+# tester:
+docker-compose run --rm app sh -c "python manage.py test"
+# le test échoue ... normal
+
+# compléter le fichier app/core/models.py:
+"""
+Database models.
+"""
+from django.db import models
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin,
+)
+
+
+class UserManager(BaseUserManager):
+    """Manager for users."""
+
+    def create_user(self, email, password=None, **extra_fields):
+        """Create, save and return a new user."""
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+
+        return user
+
+
+class User(AbstractBaseUser, PermissionsMixin):
+    """User in the system."""
+    email = models.EmailField(max_length=255, unique=True)
+    name = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    objects = UserManager()
+
+    USERNAME_FIELD = 'email'
+
+# compléter le fichier app/app/settings.py:
+# ajouter à la fin du fichier:
+AUTH_USER_MODEL = 'core.User'
+
 # ########################################
 # préparer une migration  (leçon 48)
 # ########################################
 # crée les modèles présents dans la bd
 # (exemple: création du modèle User: app\core\migrations\0001_initial.py)
 docker-compose run --rm app sh -c "python manage.py makemigrations"
+
+# cela va créer les migrations pour notre nouveau modèle utilisateur personnalisé que nous avons ajouté au projet.
+# django a automatiquement ajouté un fichier app/core/migrations/0001_initial.py
+# il s'agit du modèle qui sert à créer les tables dans la bdd
 
 # ########################################
 # appliquer la migration
@@ -698,10 +793,315 @@ docker-compose run --rm app sh -c "python manage.py wait_for_db && python manage
 # ########################################
 docker-compose run --rm app sh -c "python manage.py test"
 
+# compléter le fichier app/core/tests/test_models.py:
+    def test_new_user_email_normalized(self):
+        """Test email is normalized for new users."""
+        sample_emails = [
+            ['test1@EXAMPLE.com', 'test1@example.com'],
+            ['Test2@Example.com', 'Test2@example.com'],
+            ['TEST3@EXAMPLE.COM', 'TEST3@example.com'],
+            ['test4@example.COM', 'test4@example.com'],
+        ]
+        for email, expected in sample_emails:
+            user = get_user_model().objects.create_user(email, 'sample123')
+            self.assertEqual(user.email, expected)
 
-Setup Django Admin
+# tester
+docker-compose run --rm app sh -c "python manage.py test"
+# le test échoue ... normal
 
-API Documentation
+# compléter le fichier app/core/models.py:
+class UserManager(BaseUserManager):
+    """Manager for users."""
+
+    def create_user(self, email, password=None, **extra_fields):
+        """Create, save and return a new user."""
+        user = self.model(email=self.normalize_email(email), **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+
+        return user
+
+# tester
+docker-compose run --rm app sh -c "python manage.py test"
+# Ok tout est correct
+
+# compléter le fichier app/core/tests/test_models.py:
+    def test_new_user_without_email_raises_error(self):
+        """Test that creating a user without an email raises a ValueError."""
+        with self.assertRaises(ValueError):
+            get_user_model().objects.create_user('', 'test123')
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# le test échoue ... normal
+
+# compléter le fichier app/core/models.py:
+class UserManager(BaseUserManager):
+    """Manager for users."""
+
+    def create_user(self, email, password=None, **extra_fields):
+        """Create, save and return a new user."""
+        if not email:
+            raise ValueError('User must have an email address.')
+        user = self.model(email=self.normalize_email(email), **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+
+        return user
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# les tests sont OK
+
+# ajouter un superuser
+# compléter le fichier app/core/tests/test_models.py:
+    def test_create_superuser(self):
+        """Test creating a superuser."""
+        user = get_user_model().objects.create_superuser(
+            'test@example.com',
+            'test123',
+        )
+
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_staff)
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# le test échoue ... normal
+
+# compléter le fichier app/core/models.py:
+class UserManager(BaseUserManager):
+    """Manager for users."""
+
+    def create_user(self, email, password=None, **extra_fields):
+        """Create, save and return a new user."""
+        if not email:
+            raise ValueError('User must have an email address.')
+        user = self.model(email=self.normalize_email(email), **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+
+        return user
+
+    def create_superuser(self, email, password):
+        """Create and return a new superuser."""
+        user = self.create_user(email, password)
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(using=self._db)
+
+        return user
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# les tests sont OK
+
+# lancer le serveur django:
+docker-compose up
+
+# dans un explorateur internet:
+http://localhost:8000
+# la page d'acceuil s'afficher correctement
+
+# créer un superuser
+# ouvrir un nouveau terminal:
+docke-compose run --rm app sh -c "python manage.py createsuperuser"
+# si erreur saisir:
+winpty docker-compose run --rm app sh -c "python manage.py createsuperuser"
+
+# email: admin@example.com
+# password: 123soleil
+# confirmer: 123soleil
+
+# aller dans la page admin:
+http://localhost:8000/admin
+
+# saisir le email et password puis enter
+# la page administration doit s'afficher. Si tel est le cas tout est OK
+
+
+
+# **********************************************************************************************
+#
+# Setup Django Admin
+#
+# **********************************************************************************************
+
+# créer le fichier app/core/tests/test_admin.py
+"""
+Tests for the Django admin modifications.
+"""
+from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from django.test import Client
+
+
+class AdminSiteTests(TestCase):
+    """Tests for Django admin."""
+
+    def setUp(self):
+        """Create user and client."""
+        self.client = Client()
+        self.admin_user = get_user_model().objects.create_superuser(
+            email='admin@example.com',
+            password='testpass123',
+        )
+        self.client.force_login(self.admin_user)
+        self.user = get_user_model().objects.create_user(
+            email='user@example.com',
+            password='testpass123',
+            name='Test User'
+        )
+
+    def test_users_lists(self):
+        """Test that users are listed on page."""
+        url = reverse('admin:core_user_changelist')
+        res = self.client.get(url)
+
+        self.assertContains(res, self.user.name)
+        self.assertContains(res, self.user.email)
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# les tests échouent ... normal
+
+# compléter le fichier app/core/admin.py:
+"""
+Django admin customization.
+"""
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+
+from core import models
+
+
+class UserAdmin(BaseUserAdmin):
+    """Define the admin pages for users."""
+    ordering = ['id']
+    list_display = ['email', 'name']
+
+
+admin.site.register(models.User, UserAdmin)
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# OK
+
+# démarrer le serveur_
+docker-compose up
+
+# compléter le fichier app/core/tests/test_admin.py:
+    def test_edit_user_page(self):
+        """Test the edit user page works."""
+        url = reverse('admin:core_user_change', args=[self.user.id])
+        res = self.client.get(url)
+
+        self.assertEqual(res.status_code, 200)
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# les tests échouent ... normal
+
+# compléter le fichier app/core/admin.py:
+"""
+Django admin customization.
+"""
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils.translation import gettext_lazy as _
+
+from core import models
+
+
+class UserAdmin(BaseUserAdmin):
+    """Define the admin pages for users."""
+    ordering = ['id']
+    list_display = ['email', 'name']
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        (_('Personal Info'), {'fields': ('name',)}),
+        (
+            _('Permissions'),
+            {
+                'fields': (
+                    'is_active',
+                    'is_staff',
+                    'is_superuser',
+                )
+            }
+        ),
+        (_('Important dates'), {'fields': ('last_login',)}),
+    )
+    readonly_fields = ['last_login']
+
+
+admin.site.register(models.User, UserAdmin)
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# OK
+
+# compléter le fichier app/core/tests/test_admin.py:
+    def test_create_user_page(self):
+        """Test the create user page works."""
+        url = reverse('admin:core_user_add')
+        res = self.client.get(url)
+
+        self.assertEqual(res.status_code, 200)
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# les tests échouent ... normal
+
+# compléter le fichier app/core/admin.py:
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': (
+                'email',
+                'password1',
+                'password2',
+                'name',
+                'is_active',
+                'is_staff',
+                'is_superuser',
+            ),
+        }),
+    )
+
+# ouvrir le terminal, lancer les tests et voir s'ils échouent:
+docker-compose run --rm app sh -c "python manage.py test"
+# OK
+
+
+
+# **********************************************************************************************
+#
+# API Documentation
+#
+# **********************************************************************************************
+
+# compléter le fichier requirements.txt:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Build User API
 
